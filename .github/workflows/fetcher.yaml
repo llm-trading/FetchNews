@@ -1,0 +1,35 @@
+name: Fetch News Content
+on:
+  schedule:
+    - cron: '0 */2 * * *' # Every 2 hours
+  workflow_dispatch:
+
+jobs:
+  scrape_content:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout FetchNews
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          pip install seleniumbase pandas
+          sudo apt-get update
+          sbase install chromedriver
+          sudo apt-get install -y xvfb
+
+      - name: Run Fetcher
+        run: python main.py
+
+      - name: Commit Master Logs
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Checkpoint: Update master article logs"
+          file_pattern: 'results/*.csv'
