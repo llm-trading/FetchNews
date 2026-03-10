@@ -26,28 +26,38 @@ def get_random_user_agent():
 def scrape_batch(ticker, links_to_scrape, master_path):
     scraped_in_this_session = 0
     
+    # Keywords to purge based on your requirements
+    junk_keywords = [
+        "InvestingPro", 
+        "Should you be buying", 
+        "ProPicks AI", 
+        "Get real-time updates",
+        "Advertisement"
+    ]
+
     # Process in chunks of 50 to refresh browser
     for i in range(0, len(links_to_scrape), BROWSER_CYCLE):
         current_chunk = links_to_scrape[i : i + BROWSER_CYCLE]
         print(f"\n[Session] Fresh browser for {ticker}: Articles {i+1} to {i+len(current_chunk)}")
         
         try:
-            with SB(uc=True, incognito=True, headless2=True, xvfb=True, 
+            # Added ad_block=True for speed and kept eager strategy
+            with SB(uc=True, incognito=True, headless2=True, xvfb=True, ad_block=True,
                     agent=get_random_user_agent(), page_load_strategy="eager") as sb:
                 
                 sb.set_window_size(random.randint(1024, 1920), random.randint(768, 1080))
                 
                 for idx, row in enumerate(current_chunk):
-                    # 1. Batch Break (Human-like pause every 10 articles)
+                    # 1. Batch Break (Randomized jitter for better human simulation)
                     if idx > 0 and idx % COOLDOWN_BATCH == 0:
-                        print(f"  [zZz] Batch break: Cooling down...")
-                        time.sleep(random.uniform(15, 25))
+                        delay = random.uniform(15, 25)
+                        print(f"  [zZz] Batch break: Cooling down for {delay:.1f}s...")
+                        time.sleep(delay)
 
-                    # 2. Check for PAID (Logic preserved to maintain row count)
+                    # 2. Check for PAID logic
                     if str(row['type']).lower() != 'free':
                         print(f"  > [{idx+1}] Skipping PAID: {row['title'][:30]}")
                         row['content'] = "PAID"
-                        # Save even the PAID status to the master file immediately
                         pd.DataFrame([row]).to_csv(master_path, mode='a', header=not os.path.exists(master_path), index=False)
                         scraped_in_this_session += 1
                         continue
@@ -55,25 +65,52 @@ def scrape_batch(ticker, links_to_scrape, master_path):
                     print(f"  > [{idx+1}] Fetching FREE: {row['title'][:30]}...")
                     
                     try:
-                        sb.uc_open_with_reconnect(row['link'], 7)
+                        # 3. Enhanced Fetching Logic
+                        sb.uc_open_with_reconnect(row['link'], 10)
                         
-                        # --- HUMAN BEHAVIOR SIMULATION ---
+                        # Human jitter
                         sb.execute_script("window.scrollBy(0, 400);")
-                        sb.sleep(1.5)
-                        # ---------------------------------
+                        sb.sleep(1.2)
 
-                        sb.wait_for_element('div.articlePage', timeout=15)
-                        paragraphs = sb.find_elements('div.articlePage p')
-                        text = "\n\n".join([p.text.strip() for p in paragraphs if p.text.strip() and "Go deeper" not in p.text])
+                        # 4. Target dynamic container using the successful test selector
+                        container_selector = "div[class*='article_WYSIWYG'], div[class*='article_articlePage']"
                         
-                        row['content'] = text if text else "EMPTY_CONTENT"
+                        if not sb.is_element_visible(container_selector):
+                            print(f"    [!] Container not found for: {row['link'][:40]}")
+                            row['content'] = "SELECTOR_NOT_FOUND"
+                        else:
+                            # 5. Extract and Filter (p and h2 tags)
+                            elements = sb.find_elements(f"{container_selector} p, {container_selector} h2")
+                            
+                            clean_content = []
+                            for el in elements:
+                                # Filter Stage A: Subscription Hook Parent Check
+                                parent_html = el.get_attribute('outerHTML') or ""
+                                if 'contextual-subscription-hook' in parent_html:
+                                    continue
+                                
+                                # Filter Stage B: Junk Keywords & Length
+                                text = el.text.strip()
+                                if not text or len(text) < 10:
+                                    continue
+                                
+                                if any(junk in text for junk in junk_keywords):
+                                    continue
+                                
+                                clean_content.append(text)
+
+                            final_text = "\n\n".join(clean_content)
+                            row['content'] = final_text if final_text else "EMPTY_CONTENT"
+
+                        # 6. Immediate Checkpoint
                         pd.DataFrame([row]).to_csv(master_path, mode='a', header=not os.path.exists(master_path), index=False)
-                        
                         scraped_in_this_session += 1
-                        sb.sleep(random.uniform(4, 7))
+                        
+                        # Post-scrape cooldown
+                        sb.sleep(random.uniform(3, 6))
 
                     except Exception as e:
-                        print(f"  [!] Error: {str(e)[:50]}")
+                        print(f"  [!] Fetch Error: {str(e)[:50]}")
                         row['content'] = "ERROR_FETCHING"
                         pd.DataFrame([row]).to_csv(master_path, mode='a', header=not os.path.exists(master_path), index=False)
                         scraped_in_this_session += 1
