@@ -1,7 +1,7 @@
 name: Fetch News Content
 on:
   schedule:
-    - cron: '0 */2 * * *' # Every 2 hours
+    - cron: '17 */2 * * *' # Random minute offset
   workflow_dispatch:
 
 jobs:
@@ -12,6 +12,15 @@ jobs:
     steps:
       - name: Checkout FetchNews
         uses: actions/checkout@v4
+
+      # --- RANDOM JITTER STEP ---
+      - name: Random Jitter Delay
+        run: |
+          # Sleep for a random time between 1 and 120 seconds (up to 2 mins)
+          jitter=$(( ( RANDOM % 120 )  + 1 ))
+          echo "[*] Adding random jitter of $jitter seconds to avoid detection..."
+          sleep $jitter
+      # ---------------------------
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,7 +35,7 @@ jobs:
           sudo apt-get install -y xvfb
 
       - name: Run Fetcher
-        run: python main.py
+        run: python main_fetcher.py
 
       - name: Commit Master Logs
         uses: stefanzweifel/git-auto-commit-action@v5
