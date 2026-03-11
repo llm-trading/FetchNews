@@ -4,6 +4,11 @@ on:
     - cron: '17 */2 * * *' # Random minute offset
   workflow_dispatch:
 
+# Prevents multiple scrapers from running simultaneously and causing Git merge conflicts
+concurrency:
+  group: scrape-news
+  cancel-in-progress: false
+
 jobs:
   scrape_content:
     runs-on: ubuntu-latest
@@ -44,11 +49,10 @@ jobs:
         run: |
           rm -rf downloaded_files/
           find . -name "*.lock" -delete
-          rm -rf saved_screenshots/ # Useful if your script generates debug shots
           echo "[✓] Temporary SeleniumBase files and locks cleared."
 
       - name: Commit Master Logs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Checkpoint: Update master article logs"
-          file_pattern: 'results/*.csv'
+          commit_message: "Checkpoint: Update master article logs (JSONL)"
+          file_pattern: 'results/*.jsonl'
