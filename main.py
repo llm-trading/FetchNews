@@ -25,21 +25,26 @@ def get_random_user_agent():
     return random.choice(user_agents)
 
 def get_already_fetched_links(master_path):
-    """Atomic read of JSONL to prevent duplicates and handle resume."""
+    """Returns a set of links and the maximum row_index processed for a ticker."""
     if not os.path.exists(master_path):
-        return set()
+        return set(), 0
     links = set()
+    max_idx = 0
     try:
         with open(master_path, 'r', encoding='utf-8') as f:
             for line in f:
                 try:
                     data = json.loads(line)
                     links.add(data['link'])
+                    # Track the last successful row index (default to 0 if missing)
+                    curr_idx = data.get('row_index', 0)
+                    if curr_idx > max_idx:
+                        max_idx = curr_idx
                 except json.JSONDecodeError:
                     continue
     except Exception as e:
         print(f"Error reading checkpoint {master_path}: {e}")
-    return links
+    return links, max_idx
 
 def scrape_batch(ticker, links_to_scrape, master_path):
     scraped_in_this_session = 0
@@ -66,9 +71,9 @@ def scrape_batch(ticker, links_to_scrape, master_path):
                 sb.set_window_size(random.randint(1024, 1920), random.randint(768, 1080))
                 
                 for idx, row in enumerate(current_chunk):
-                    # TRACKING: Using 'original_index' for logging
-                    orig_idx = row.get('original_index', idx + 1)
-                    row['source_row'] = orig_idx # Explicit key for easier JSON parsing later
+                    # TRACKING: Using 'row_index' for logging
+                    orig_idx = row.get('row_index', idx + 1)
+                    # row['row_index'] = orig_idx # Explicit key for easier JSON parsing later
 
                     # 1. Batch Break (Randomized jitter for better human simulation)
                     if idx > 0 and idx % COOLDOWN_BATCH == 0:
@@ -158,10 +163,10 @@ if __name__ == "__main__":
         
         # Load and preserve the original CSV index
         df_source = pd.read_csv(os.path.join(INPUT_DIR, source_file))
-        df_source['original_index'] = df_source.index  # Injecting the row number
+        df_source['row_index'] = df_source.index  # Injecting the row number
         
         # Determine already processed links from JSONL													   
-        done_links = get_already_fetched_links(master_path)
+        done_links, max_idx = get_already_fetched_links(master_path)
 
         # Filter links
         pending = df_source[~df_source['link'].isin(done_links)]
@@ -170,11 +175,22 @@ if __name__ == "__main__":
             print(f"[-] {t} is complete.")
             continue
 
+        # --- CONTINUITY SAFEGUARD ---
+        # Only check if we have an existing file (max_idx > 0)
+        if max_idx > 0:
+            first_pending_idx = pending.iloc[0]['row_index']
+            if first_pending_idx != (max_idx + 1):
+                print(f"\n[!] ABORTING: Data divergence detected for {t}!")
+                print(f"    Last processed row in JSONL: {max_idx}")
+                print(f"    First available row in Source: {first_pending_idx}")
+                print("    Aborting run to prevent duplicate/mismatched data push.")
+                exit(1) # Stops the entire script run
+
         # Slice workload
         remaining_quota = RUN_LIMIT - total_run_count
         to_scrape = pending.head(remaining_quota).to_dict('records')
         
-        print(f"[*] {t}: Processing {len(to_scrape)} articles (Quota left: {remaining_quota})")
+        print(f"[*] {t}: Scraping {len(to_scrape)} articles (Resuming from Row #{to_scrape[0]['row_index']})")
         
         fetched = scrape_batch(t, to_scrape, master_path)
         total_run_count += fetched

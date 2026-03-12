@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout FetchNews
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensures full history is available for syncing
 
       # --- RANDOM JITTER STEP ---
       - name: Random Jitter Delay
@@ -39,6 +41,14 @@ jobs:
           sbase install chromedriver
           sudo apt-get install -y xvfb
 
+      # --- SYNC STEP ---
+      - name: Pull latest results
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase # Get any JSONL updates from the previous run
+      # -----------------
+
       - name: Run Fetcher
         run: python main.py
         env:
@@ -56,3 +66,5 @@ jobs:
         with:
           commit_message: "Checkpoint: Update master article logs (JSONL)"
           file_pattern: 'results/*.jsonl'
+          # This ensures that NEW files are also added, not just updates
+          add_options: '--all'
