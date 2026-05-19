@@ -2,11 +2,25 @@
 
 > Crash-proof, resumable financial news scraper for Investing.com — built on SeleniumBase with anti-bot evasion.
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![SeleniumBase](https://img.shields.io/badge/SeleniumBase-UC_Mode-00B4D8?style=for-the-badge&logo=selenium&logoColor=white)](https://seleniumbase.io/)
-[![Output](https://img.shields.io/badge/Output-JSONL-F4A261?style=for-the-badge&logo=json&logoColor=white)]()
-[![License](https://img.shields.io/badge/License-MIT-2EC4B6?style=for-the-badge)]()
-[![Tickers](https://img.shields.io/badge/Tickers-7_Stocks-E63946?style=for-the-badge&logo=stockx&logoColor=white)]()
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![SeleniumBase](https://img.shields.io/badge/SeleniumBase-UC_Mode-00B4D8?style=flat-square&logo=selenium&logoColor=white)](https://seleniumbase.io/)
+[![Output](https://img.shields.io/badge/Output-JSONL-F4A261?style=flat-square)](https://jsonlines.org/)
+[![License](https://img.shields.io/badge/License-MIT-2EC4B6?style=flat-square)]()
+[![Tickers](https://img.shields.io/badge/Tickers-7_Stocks-E63946?style=flat-square)]()
+
+---
+
+## Problem Statement
+
+Training LLMs or sentiment models on financial news requires **clean, full article text** — not just headlines. Investing.com hosts thousands of stock-specific news articles, but:
+
+- **Anti-bot protection** blocks naive scrapers and headless browsers
+- **Paywalled content** is mixed in with free articles — no easy way to tell without loading the page
+- **Long scraping jobs fail mid-run** — no resume means restarting from zero
+- **Content is noisy** — subscription CTAs, ad text, and promotional banners pollute extracted text
+- **Row alignment breaks ML pipelines** — if article order in your dataset doesn't match the source CSV, downstream models train on wrong labels
+
+**FetchNews** solves all five: it bypasses bot detection, skips paid articles without fetching them, resumes from the last successful article on restart, filters junk text at extraction time, and enforces strict row-index continuity so every JSONL record maps exactly back to its source CSV row.
 
 ---
 
